@@ -66,23 +66,23 @@
     },
 
     {
-      "id": "kling-3.0/video",
+      "id": "kling-3.0",
       "label": "Kling 3.0",
       "type": "video",
       "endpoint": "jobs",
-      "id_confirmed": true,
+      "id_confirmed": false,
       "input_verified": false,
       "default": true,
-      "use_when": "Cinematic video from text or a start image, multi-shot storytelling, native audio, up to ~15s. Strong general-purpose default with the most cinematic camera control.",
+      "use_when": "Cinematic video from text or a start image, multi-shot storytelling, native audio, 3-15s. Strong general-purpose default with the most cinematic camera control.",
       "supports_reference_images": true,
       "input": {
         "prompt": { "type": "string", "required": true },
-        "image_urls": { "type": "string[]", "required": false, "note": "Start frame / reference image(s) for image-to-video." },
-        "aspect_ratio": { "type": "string", "default": "16:9", "options": ["16:9", "9:16", "1:1"] },
-        "duration": { "type": "integer", "default": 5, "note": "Up to ~15s." },
-        "enable_audio": { "type": "boolean", "default": true, "note": "Native audio generation." }
+        "image_urls": { "type": "string[]", "required": false, "note": "Start/last frame image(s); when set, aspect_ratio is auto-matched." },
+        "aspect_ratio": { "type": "string", "default": "16:9", "options": ["16:9", "9:16", "1:1"], "note": "Optional when image_urls is provided." },
+        "duration": { "type": "integer", "default": 5, "min": 3, "max": 15 },
+        "mode": { "type": "string", "default": "std", "options": ["std", "pro"], "note": "'std' standard res, 'pro' higher res." }
       },
-      "approx_cost": "~$0.10–0.40 / clip (duration/quality dependent)"
+      "approx_cost": "~$0.10–0.40 / clip (duration/mode dependent)"
     },
     {
       "id": "gemini-omni-video",
