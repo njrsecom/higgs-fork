@@ -52,6 +52,7 @@
       "endpoint": "jobs",
       "id_confirmed": true,
       "input_verified": true,
+      "default": true,
       "use_when": "High-fidelity Gemini 3 Pro image model, up to 4K, excellent at readable text/logos/diagrams and crisp realism. Great default when GPT Image 2 isn't specifically needed — fast and strong on product/marketing shots and reference-based edits.",
       "supports_reference_images": true,
       "input": {
@@ -71,6 +72,7 @@
       "endpoint": "jobs",
       "id_confirmed": true,
       "input_verified": false,
+      "default": true,
       "use_when": "Cinematic video from text or a start image, multi-shot storytelling, native audio, up to ~15s. Strong general-purpose default with the most cinematic camera control.",
       "supports_reference_images": true,
       "input": {

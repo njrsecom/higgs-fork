@@ -22,6 +22,7 @@ export interface ModelDef {
   endpoint: string;
   id_confirmed?: boolean;
   input_verified?: boolean;
+  default?: boolean;
   use_when: string;
   supports_reference_images?: boolean;
   input: Record<string, InputField>;
@@ -64,7 +65,10 @@ export function getModel(id: string): ModelDef | undefined {
 }
 
 export function defaultModel(type: "image" | "video"): ModelDef {
-  // Convention: the first model of a type in the catalog is the default.
+  // Prefer an explicit `"default": true` in models.json so routing can't be
+  // broken by reordering. Fall back to the first model of the type.
+  const flagged = catalog.models.find((x) => x.type === type && x.default);
+  if (flagged) return flagged;
   const m = catalog.models.find((x) => x.type === type);
   if (!m) throw new Error(`No ${type} model defined in models.json`);
   return m;
