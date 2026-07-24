@@ -42,15 +42,21 @@ function fail(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true };
 }
 
-// Higgsfield-style one-line metadata summary: "Nano Banana Pro · 9:16 · 2k · ~$0.05/image"
-function metaLine(model: ModelDef, modelId: string, input: Record<string, unknown>): string {
+// Higgsfield-style one-line metadata summary: "Nano Banana Pro · 9:16 · 2k · ×4 · ~$0.05/image"
+function metaLine(
+  model: ModelDef,
+  modelId: string,
+  input: Record<string, unknown>,
+  count = 1,
+): string {
   const parts: string[] = [model.label];
   const aspect = input.aspect_ratio ?? input.aspectRatio ?? input.image_size;
   if (aspect && aspect !== "auto") parts.push(String(aspect));
   if (input.resolution) parts.push(String(input.resolution));
   if (input.duration) parts.push(`${input.duration}s`);
   if (input.enable_audio) parts.push("🔊 audio");
-  if (input.n && Number(input.n) > 1) parts.push(`×${input.n}`);
+  const n = Math.max(count, Number(input.n) || 1);
+  if (n > 1) parts.push(`×${n}`);
   if (model.approx_cost) parts.push(`~${model.approx_cost.replace(/^~/, "")}`);
   // Surface the swapped id (e.g. GPT Image 2 image-to-image) so it's never hidden.
   if (modelId !== model.id) parts.push(`[${modelId}]`);
@@ -62,11 +68,12 @@ interface RenderMeta {
   model: ModelDef;
   modelId: string;
   input: Record<string, unknown>;
+  count?: number;
 }
 
 function renderResult(meta: RenderMeta, res: TaskResult): string {
   const icon = meta.kind === "Video" ? "🎬" : "🎨";
-  const summary = `${icon} ${metaLine(meta.model, meta.modelId, meta.input)}`;
+  const summary = `${icon} ${metaLine(meta.model, meta.modelId, meta.input, meta.count)}`;
 
   if (res.state === "success") {
     const lines = res.urls.length
@@ -127,9 +134,32 @@ server.tool(
         resolution: args.resolution,
         count: args.count,
       };
-      const { modelId, input } = buildInput(model, genArgs);
-      const res = await generate(model.endpoint, modelId, input, config.imageTimeoutMs);
-      return ok(renderResult({ kind: "Image", model, modelId, input }, res));
+      const count = Math.min(Math.max(args.count ?? 1, 1), 4);
+      const nativeBatch = "n" in model.input; // e.g. GPT Image 2 returns n images in one call
+
+      if (count <= 1 || nativeBatch) {
+        const { modelId, input } = buildInput(model, genArgs);
+        const res = await generate(model.endpoint, modelId, input, config.imageTimeoutMs);
+        return ok(renderResult({ kind: "Image", model, modelId, input, count }, res));
+      }
+
+      // Model has no native batch field: fire `count` generations concurrently
+      // and merge their URLs, so multiple images run in parallel, not in series.
+      const { modelId, input } = buildInput(model, { ...genArgs, count: undefined });
+      const results = await Promise.all(
+        Array.from({ length: count }, () =>
+          generate(model.endpoint, modelId, { ...input }, config.imageTimeoutMs),
+        ),
+      );
+      const urls = results.flatMap((r) => r.urls);
+      const merged: TaskResult = {
+        taskId: results.map((r) => r.taskId).join(", "),
+        state: urls.length ? "success" : results.every((r) => r.state === "fail") ? "fail" : "pending",
+        urls,
+        failMessage: results.find((r) => r.failMessage)?.failMessage,
+        raw: results.map((r) => r.raw),
+      };
+      return ok(renderResult({ kind: "Image", model, modelId, input, count }, merged));
     } catch (e) {
       return fail(`generate_image error: ${(e as Error).message}`);
     }
