@@ -81,20 +81,24 @@ rather than cramming everything into one prompt.
 
 ## Model routing (defaults)
 
-Read each model's `use_when` in the catalog; these are the headline rules:
+The stack is intentionally five models. Read each model's `use_when` in the catalog; these are
+the headline rules:
 
-- **Image, general / product / marketing:** `google/nano-banana` (fast, cheap default).
-- **Image with readable text, logos, diagrams, or needing 4K:** `google/nano-banana-pro`.
-- **Image, photoreal portrait / cinematic realism:** `bytedance/seedream`.
-- **Image, complex precise layout or masked edit:** `openai/gpt-image`.
-- **Video, general / social / ad (default):** `veo3_fast` (Veo 3 with audio, great value).
-- **Video, hero / final / best quality:** `veo3`.
-- **Video, character identity consistency:** `bytedance/seedance`.
-- **Video, narrative realism / storyboard from images:** `sora-2`.
-- **Music / audio:** `suno`.
+**Images**
+- **Default / general / product / marketing / anything needing readable text, logos, or 4K:**
+  `google/nano-banana-pro`. Fast, high-fidelity, best at legible text — the everyday choice.
+- **Complex multi-element layout, precise instruction-following, or careful masked edits:**
+  `gpt-image-2-text-to-image` (the adapter swaps to `gpt-image-2-image-to-image` when reference
+  images are supplied). Reach for this when composition precision matters more than speed.
 
-When unsure between two, pick the cheaper one and mention you can re-run on the premium model
-if they want more polish.
+**Videos**
+- **Default / cinematic / multi-shot / needs camera control + audio:** `kling-3.0/video`.
+- **Fast + realistic, or preserving a subject's identity across the clip:** `bytedance/seedance-2`.
+- **Polished Google-quality generation, or editing/extending an existing clip conversationally
+  (text+image+video in):** `gemini-omni-video`.
+
+When unsure between two in the same category, pick the faster/cheaper one and mention you can
+re-run on the other for more polish.
 
 ## Parameter rules
 
