@@ -45,15 +45,59 @@ The same core (a kie.ai adapter + these two files) powers two front-ends:
   poll `GET /api/v1/jobs/recordInfo?taskId=...`. Veo has a dedicated route. See `models.json`.
 - **Bring-your-own-key:** the kie.ai key comes from `KIE_API_KEY` (never committed).
 
+## Quick start (MCP server)
+
+```bash
+npm install
+npm run build
+cp .env.example .env   # then put your kie.ai key in KIE_API_KEY
+```
+
+Get a key at [kie.ai](https://kie.ai). The key is read from `KIE_API_KEY` and is never committed.
+
+### Use it from Claude Desktop
+
+Add to `claude_desktop_config.json` (Settings → Developer → Edit Config):
+
+```json
+{
+  "mcpServers": {
+    "higgs-fork-kie": {
+      "command": "node",
+      "args": ["/absolute/path/to/higgs-fork/dist/index.js"],
+      "env": { "KIE_API_KEY": "your_kie_ai_api_key_here" }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. Then just talk: *"make a cosy overhead shot of someone painting, for
+a TikTok."* Claude writes the full prompt, picks the model, sets 9:16, and calls the tool.
+Load the **director** prompt for the full routing/craft guidance in any session.
+
+### Tools exposed
+
+| Tool | What it does |
+|------|--------------|
+| `generate_image` | text/reference → image (default: Nano Banana Pro) |
+| `generate_video` | text/reference → video (default: Kling 3.0) |
+| `list_models` | the current catalog from `models.json` |
+| `check_status` | poll a `taskId` that timed out earlier |
+
+`director` is also registered as an MCP **prompt** (loads `director-prompt.md` + the live catalog).
+
 ## Roadmap
 
 - [x] Director system prompt (`director-prompt.md`)
 - [x] Model catalog / routing map (`models.json`)
-- [ ] kie.ai adapter: `createTask` + poll, per-model request building
-- [ ] MCP server wrapping the adapter (`generate_image`, `generate_video`, `check_status`)
+- [x] kie.ai adapter: `createTask` + poll, per-model request building (`src/kie.ts`, `src/buildInput.ts`)
+- [x] MCP server wrapping the adapter (`generate_image`, `generate_video`, `list_models`, `check_status`)
+- [ ] Verify `input` field names against a live key (fields marked `input_verified: false` in `models.json`)
 - [ ] Web app with embedded Claude director
 - [ ] Workflow recipes (explainer, UGC ad, thumbnail) — optional, added over time
 
 ## Status
 
-Early scaffolding. The two foundation files are in place; the adapter is next.
+The MCP server is built and boots (4 tools + director prompt over 5 models). It needs a real
+`KIE_API_KEY` to generate; the one remaining verification is confirming per-model `input` field
+names against the live API (a one-line-per-field fix in `models.json` if any differ).
