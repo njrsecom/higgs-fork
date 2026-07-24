@@ -1,0 +1,212 @@
+{
+  "_readme": "The kie.ai model catalog + routing map. This is the single source of truth the 'director' (Claude) reads to pick a model and fill params, and that the adapter reads to build the actual HTTP request. Update this file when kie.ai adds/changes models — nothing else needs to change.",
+
+  "provider": "kie.ai",
+
+  "api": {
+    "base_url": "https://api.kie.ai",
+    "auth": {
+      "header": "Authorization",
+      "format": "Bearer ${KIE_API_KEY}",
+      "note": "Key is read from the KIE_API_KEY env var (server-side) or per-user BYOK storage. NEVER commit a key."
+    },
+    "endpoints": {
+      "jobs": {
+        "create": "POST /api/v1/jobs/createTask",
+        "poll": "GET /api/v1/jobs/recordInfo",
+        "poll_param": "taskId",
+        "note": "Unified async API for most models. Body = { \"model\": \"<id>\", \"input\": { ...model params } }. Response returns a taskId; poll until state is success/fail."
+      },
+      "veo": {
+        "create": "POST /api/v1/veo/generate",
+        "poll": "GET /api/v1/veo/record-info",
+        "poll_param": "taskId",
+        "upgrade_1080p": "GET /api/v1/veo/get-1080p-video",
+        "note": "Dedicated Veo route. Some Veo variants are also reachable through the unified jobs endpoint; prefer whichever the adapter has verified."
+      }
+    },
+    "flow": "1) POST create -> get taskId.  2) Poll every ~3-5s until state == success (result urls) or fail.  3) Return media url(s)."
+  },
+
+  "_id_confidence": "Fields marked \"verify\": true have model IDs/params confirmed against docs.kie.ai. Those marked false are best-effort from community docs and should be confirmed on first integration — the shape is right, the exact string may need a tweak.",
+
+  "models": [
+    {
+      "id": "google/nano-banana",
+      "label": "Nano Banana",
+      "type": "image",
+      "endpoint": "jobs",
+      "verify": true,
+      "use_when": "DEFAULT image model. Fast + cheap. Great for product/marketing shots, everyday scenes, and reference-based edits. Pick this unless a reason below overrides it.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "image_urls": { "type": "string[]", "required": false, "note": "Reference or edit source images (hosted URLs)." },
+        "image_size": { "type": "string", "default": "auto", "options": ["auto", "1:1", "9:16", "16:9", "3:4", "4:3"] },
+        "output_format": { "type": "string", "default": "png", "options": ["png", "jpeg"] }
+      },
+      "approx_cost": "~$0.015–0.02 / image"
+    },
+    {
+      "id": "google/nano-banana-pro",
+      "label": "Nano Banana Pro",
+      "type": "image",
+      "endpoint": "jobs",
+      "verify": true,
+      "use_when": "Higher fidelity + 4K, and MUCH better at rendering legible text, logos, diagrams, and UI. Use when the image must contain readable words, fine typography, or needs 2K/4K crispness.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "image_urls": { "type": "string[]", "required": false },
+        "image_size": { "type": "string", "default": "auto", "options": ["auto", "1:1", "9:16", "16:9", "3:4", "4:3"] },
+        "resolution": { "type": "string", "default": "2k", "options": ["1k", "2k", "4k"] },
+        "output_format": { "type": "string", "default": "png" }
+      },
+      "approx_cost": "~$0.05–0.10 / image"
+    },
+    {
+      "id": "bytedance/seedream",
+      "label": "Seedream",
+      "type": "image",
+      "endpoint": "jobs",
+      "verify": false,
+      "use_when": "Strong photoreal / cinematic aesthetic and portraits. Good alternative when Nano Banana output feels flat and you want more 'shot on camera' realism.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "image_url": { "type": "string", "required": false },
+        "aspect_ratio": { "type": "string", "default": "1:1", "options": ["1:1", "9:16", "16:9", "3:4", "4:3"] }
+      },
+      "approx_cost": "~$0.03 / image"
+    },
+    {
+      "id": "openai/gpt-image",
+      "label": "GPT Image (OpenAI 4o)",
+      "type": "image",
+      "endpoint": "jobs",
+      "verify": false,
+      "use_when": "Best instruction-following for complex, multi-element compositions and precise edits with masks. Slower + pricier — use when layout precision matters more than speed.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "filesUrl": { "type": "string[]", "required": false, "note": "Source images for edit/variant." },
+        "maskUrl": { "type": "string", "required": false },
+        "n": { "type": "integer", "default": 1, "min": 1, "max": 4 },
+        "size": { "type": "string", "default": "auto", "options": ["auto", "1024x1024", "1024x1536", "1536x1024"] }
+      },
+      "approx_cost": "~$0.04–0.19 / image (quality dependent)"
+    },
+    {
+      "id": "flux-kontext",
+      "label": "Flux Kontext",
+      "type": "image",
+      "endpoint": "jobs",
+      "verify": false,
+      "use_when": "Cheapest fast image path and solid at style transfer / consistent character edits across a series. Good for high-volume iteration.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "imageUrls": { "type": "string[]", "required": false },
+        "aspect_ratio": { "type": "string", "default": "1:1" }
+      },
+      "approx_cost": "~$0.015 / image"
+    },
+
+    {
+      "id": "veo3_fast",
+      "label": "Veo 3 Fast",
+      "type": "video",
+      "endpoint": "veo",
+      "verify": true,
+      "use_when": "DEFAULT video model. Google Veo 3, fast tier, with audio. Great quality-per-dollar for most social/ad clips. Pick this unless the user needs top-tier quality or a specific other model.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "imageUrls": { "type": "string[]", "required": false, "note": "Optional start frame(s) for image-to-video." },
+        "aspectRatio": { "type": "string", "default": "16:9", "options": ["16:9", "9:16"] },
+        "duration": { "type": "integer", "default": 8, "note": "Veo clips are ~8s." }
+      },
+      "approx_cost": "~$0.30–0.40 / 8s clip"
+    },
+    {
+      "id": "veo3",
+      "label": "Veo 3 Quality",
+      "type": "video",
+      "endpoint": "veo",
+      "verify": true,
+      "use_when": "Top-tier Veo 3 quality with audio. Use when the user explicitly wants the best-looking result and cost is secondary (hero shots, final ad).",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "imageUrls": { "type": "string[]", "required": false },
+        "aspectRatio": { "type": "string", "default": "16:9", "options": ["16:9", "9:16"] },
+        "duration": { "type": "integer", "default": 8 }
+      },
+      "approx_cost": "~$2.00 / 8s clip"
+    },
+    {
+      "id": "sora-2",
+      "label": "Sora 2",
+      "type": "video",
+      "endpoint": "jobs",
+      "verify": false,
+      "use_when": "Strong physical realism, coherent motion, and storyboard-from-images mode. Use for narrative/cinematic sequences or when you want to drive a multi-image storyboard.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "filesUrl": { "type": "string[]", "required": false, "note": "1+ images enables storyboard mode." },
+        "aspect_ratio": { "type": "string", "default": "16:9", "options": ["16:9", "9:16"] },
+        "quality": { "type": "string", "default": "standard", "options": ["standard", "pro_standard", "pro_hd"] }
+      },
+      "approx_cost": "~$0.10/s standard, ~$0.30–0.50/s pro"
+    },
+    {
+      "id": "bytedance/seedance",
+      "label": "Seedance",
+      "type": "video",
+      "endpoint": "jobs",
+      "verify": false,
+      "use_when": "Best identity/character consistency in motion and reliable image-to-video. Use when preserving a subject's look across the clip matters.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "image_url": { "type": "string", "required": false },
+        "quality": { "type": "string", "default": "lite", "options": ["lite", "pro"] },
+        "duration": { "type": "integer", "default": 5 },
+        "aspect_ratio": { "type": "string", "default": "16:9" }
+      },
+      "approx_cost": "~$0.05/s (lite), 4–6x for pro"
+    },
+    {
+      "id": "kling",
+      "label": "Kling",
+      "type": "video",
+      "endpoint": "jobs",
+      "verify": false,
+      "use_when": "Smooth motion and good image-to-video animation of a single start frame. Solid general-purpose alternative to Veo Fast.",
+      "supports_reference_images": true,
+      "input": {
+        "prompt": { "type": "string", "required": true },
+        "image_url": { "type": "string", "required": false },
+        "duration": { "type": "integer", "default": 5, "options": [5, 10] },
+        "aspect_ratio": { "type": "string", "default": "16:9" }
+      },
+      "approx_cost": "~$0.10–0.30 / clip"
+    },
+
+    {
+      "id": "suno",
+      "label": "Suno",
+      "type": "audio",
+      "endpoint": "jobs",
+      "verify": false,
+      "use_when": "Music and song generation (with or without lyrics). Use for background tracks, jingles, or full songs.",
+      "supports_reference_images": false,
+      "input": {
+        "prompt": { "type": "string", "required": true, "note": "Style/mood description or lyrics." },
+        "make_instrumental": { "type": "boolean", "default": false }
+      },
+      "approx_cost": "~$0.02–0.05 / track"
+    }
+  ]
+}
