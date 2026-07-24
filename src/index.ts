@@ -18,7 +18,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { config } from "./config.js";
-import { catalog, listModels, getModel, defaultModel } from "./catalog.js";
+import { catalog, listModels, getModel, defaultModel, type ModelDef } from "./catalog.js";
 import { buildInput, type GenArgs } from "./buildInput.js";
 import { generate, getStatus, type TaskResult } from "./kie.js";
 
@@ -42,18 +42,43 @@ function fail(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true };
 }
 
-function renderResult(label: string, modelId: string, res: TaskResult): string {
+// Higgsfield-style one-line metadata summary: "Nano Banana Pro · 9:16 · 2k · ~$0.05/image"
+function metaLine(model: ModelDef, modelId: string, input: Record<string, unknown>): string {
+  const parts: string[] = [model.label];
+  const aspect = input.aspect_ratio ?? input.aspectRatio ?? input.image_size;
+  if (aspect && aspect !== "auto") parts.push(String(aspect));
+  if (input.resolution) parts.push(String(input.resolution));
+  if (input.duration) parts.push(`${input.duration}s`);
+  if (input.enable_audio) parts.push("🔊 audio");
+  if (input.n && Number(input.n) > 1) parts.push(`×${input.n}`);
+  if (model.approx_cost) parts.push(`~${model.approx_cost.replace(/^~/, "")}`);
+  // Surface the swapped id (e.g. GPT Image 2 image-to-image) so it's never hidden.
+  if (modelId !== model.id) parts.push(`[${modelId}]`);
+  return parts.join(" · ");
+}
+
+interface RenderMeta {
+  kind: string; // "Image" | "Video"
+  model: ModelDef;
+  modelId: string;
+  input: Record<string, unknown>;
+}
+
+function renderResult(meta: RenderMeta, res: TaskResult): string {
+  const icon = meta.kind === "Video" ? "🎬" : "🎨";
+  const summary = `${icon} ${metaLine(meta.model, meta.modelId, meta.input)}`;
+
   if (res.state === "success") {
     const lines = res.urls.length
-      ? res.urls.map((u, i) => `${i + 1}. ${u}`).join("\n")
+      ? res.urls.map((u, i) => (res.urls.length > 1 ? `${i + 1}. ${u}` : u)).join("\n")
       : "(no URLs found in response — inspect raw)";
-    return `✅ ${label} generated with ${modelId}.\n\n${lines}`;
+    return `${summary}\n\n${lines}`;
   }
   if (res.state === "fail") {
-    return `❌ ${label} failed on ${modelId}: ${res.failMessage ?? "unknown error"}`;
+    return `❌ ${meta.kind} failed\n${summary}\nError: ${res.failMessage ?? "unknown error"}`;
   }
   return (
-    `⏳ ${label} still processing on ${modelId} (timed out waiting).\n` +
+    `⏳ ${meta.kind} still processing (timed out waiting)\n${summary}\n` +
     `taskId: ${res.taskId}\n` +
     `Call check_status with this taskId to fetch the result when it's ready.`
   );
@@ -104,7 +129,7 @@ server.tool(
       };
       const { modelId, input } = buildInput(model, genArgs);
       const res = await generate(model.endpoint, modelId, input, config.imageTimeoutMs);
-      return ok(renderResult("Image", modelId, res));
+      return ok(renderResult({ kind: "Image", model, modelId, input }, res));
     } catch (e) {
       return fail(`generate_image error: ${(e as Error).message}`);
     }
@@ -147,7 +172,7 @@ server.tool(
       };
       const { modelId, input } = buildInput(model, genArgs);
       const res = await generate(model.endpoint, modelId, input, config.videoTimeoutMs);
-      return ok(renderResult("Video", modelId, res));
+      return ok(renderResult({ kind: "Video", model, modelId, input }, res));
     } catch (e) {
       return fail(`generate_video error: ${(e as Error).message}`);
     }
@@ -185,7 +210,14 @@ server.tool(
   async (args) => {
     try {
       const res = await getStatus(args.endpoint ?? "jobs", args.task_id);
-      return ok(renderResult("Task", args.task_id, res));
+      if (res.state === "success") {
+        const lines = res.urls.length ? res.urls.join("\n") : "(no URLs found — inspect raw)";
+        return ok(`✅ Task ${args.task_id} complete.\n\n${lines}`);
+      }
+      if (res.state === "fail") {
+        return ok(`❌ Task ${args.task_id} failed: ${res.failMessage ?? "unknown error"}`);
+      }
+      return ok(`⏳ Task ${args.task_id} still processing. Check again shortly.`);
     } catch (e) {
       return fail(`check_status error: ${(e as Error).message}`);
     }
