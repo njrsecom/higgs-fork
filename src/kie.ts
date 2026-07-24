@@ -164,7 +164,7 @@ export async function generate(
   const deadline = Date.now() + timeoutMs;
 
   // Small initial delay before first poll — generation never returns instantly.
-  await sleep(Math.min(config.pollIntervalMs, 3000));
+  await sleep(Math.min(config.pollIntervalMs, 1500));
 
   while (Date.now() < deadline) {
     const status = await getStatus(endpoint, taskId);

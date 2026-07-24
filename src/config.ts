@@ -9,7 +9,7 @@ function num(name: string, fallback: number): number {
 export const config = {
   apiKey: process.env.KIE_API_KEY ?? "",
   baseUrl: process.env.KIE_BASE_URL ?? "https://api.kie.ai",
-  pollIntervalMs: num("POLL_INTERVAL_MS", 4000),
+  pollIntervalMs: num("POLL_INTERVAL_MS", 2000),
   imageTimeoutMs: num("IMAGE_TIMEOUT_MS", 180_000),
   videoTimeoutMs: num("VIDEO_TIMEOUT_MS", 360_000),
 };
